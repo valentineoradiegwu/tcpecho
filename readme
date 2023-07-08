@@ -1,0 +1,11 @@
+COMPILING THE UTILS LIB
+1. cd tcpecho/lib
+2. g++ -c utils.cpp
+
+COMPILING THE SERVER
+1. cd tcpecho
+2. g++ lib/utils.o -o server echoserver.cpp
+
+COMPILING THE CLIENT
+1. cd tcpecho
+2. g++ lib/utils.o -o client echoclient.cpp
