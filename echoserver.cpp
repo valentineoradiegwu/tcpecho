@@ -45,6 +45,7 @@ int main(int argc, char** argv)
 	{
 		if ( (connfd = accept(listenfd, (sockaddr*)&clientaddr, &clientaddrlen)) < 0)
 		{
+			if (errno == EINTR) continue;
 			std::cerr << "Socket accept failed with error: " << strerror(errno) << std::endl;
 			exit(EXIT_FAILURE);
 		}
