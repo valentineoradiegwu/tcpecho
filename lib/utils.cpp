@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string>
 #include <iostream>
+#include<sys/wait.h>
 
 namespace val::utils
 {
@@ -141,5 +142,39 @@ again:
 			}
 			std::cout << rcv_line;
 		}
+	}
+
+	Sigfunc* signal(int signo, Sigfunc* handler)
+	{
+		struct sigaction act, oact;
+		act.sa_handler = handler;
+		sigemptyset(&act.sa_mask);
+		act.sa_flags = 0;
+
+		if (signo == SIGALRM)
+		{
+	 #ifdef SA_INTERRUPT
+			 act.sa_flags |= SA_INTERRUPT; /* SunOS 4.x */
+	 #endif
+		}
+		else
+		{
+	#ifdef SA_RESTART
+			act.sa_flags |= SA_RESTART; /* SVR4, 4.4BSD */
+	#endif
+		}
+		if (sigaction(signo, &act, &oact) < 0)
+			return SIG_ERR;
+		return oact.sa_handler;
+	}
+
+	void sigchld_handler(int signo)
+	{
+		pid_t pid;
+		int stat;
+
+		pid = wait(&stat);
+		std::cout << "Child with pid: " << pid << " terminated." << std::endl;
+		return;
 	}
 }

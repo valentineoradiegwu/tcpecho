@@ -38,6 +38,7 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 	
+	val::utils::signal(SIGCHLD, val::utils::sigchld_handler);
 	clientaddrlen = sizeof(clientaddr);
 
 	while (true)
