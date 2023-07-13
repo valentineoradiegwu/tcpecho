@@ -172,9 +172,10 @@ again:
 	{
 		pid_t pid;
 		int stat;
-
-		pid = wait(&stat);
-		std::cout << "Child with pid: " << pid << " terminated." << std::endl;
+		while((pid = waitpid(-1, &stat, WNOHANG)) > 0)
+		{
+			std::cout << "Child with pid: " << pid << " terminated." << std::endl;
+		}
 		return;
 	}
 }
