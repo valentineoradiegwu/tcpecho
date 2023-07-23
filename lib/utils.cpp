@@ -1,9 +1,13 @@
 #include "utils.h"
+#include "sum.h"
+
 #include <unistd.h>
+#include <stdio.h>
 #include <errno.h>
 #include <string>
 #include <iostream>
-#include<sys/wait.h>
+#include <sys/wait.h>
+#include <sys/select.h>
 
 namespace val::utils
 {
@@ -125,6 +129,26 @@ again:
 		}
 	}
 
+	/*
+	 * Does not work in the following scenarios
+	 * 1. The sending and receiving hosts have different byte orders.
+	 * 2. The size of long is different in the hosts.
+	 * 3. The structs are packed differently in the hosts.
+	 */
+	void str_echo_binary(int fd)
+	{
+		ssize_t bytes_read;
+		struct args args;
+	        struct result res;
+
+		if ((bytes_read = readn(fd, &args, sizeof(args))) > 0)
+		{
+			std::cout << "Server received message from client of " << bytes_read << " bytes." << std::endl;
+			res.sum = args.arg1 + args.arg2;
+			writen(fd, &res, sizeof(res));
+		}
+	}
+
 	void str_cli(int fd)
 	{
 		std::string line;
@@ -141,6 +165,75 @@ again:
 				exit(EXIT_FAILURE);
 			}
 			std::cout << rcv_line;
+		}
+	}
+
+	/*
+	 * Does not work in the following scenarios
+	 * 1. The sending and receiving hosts have different byte orders.
+	 * 2. The size of long is different in the hosts.
+	 * 3. The structs are packed differently in the hosts.
+	 */
+	void str_cli_binary(int fd)
+	{
+		std::string line;
+
+		struct args args;
+		struct result res;
+
+		while(std::getline(std::cin, line))
+		{
+			if (line == "SHUTDOWN")
+				break;
+			line += '\n';
+			if(sscanf(line.c_str(), "%ld%ld", &args.arg1, &args.arg2) != 2)
+			{
+				std::cerr << "Two operands are required for multiplication. Try again!" << std::endl;
+				continue;
+			}
+
+			val::utils::writen(fd, &args, sizeof(args));
+			if(val::utils::readn(fd, &res, sizeof(res)) <= 0)
+			{
+				std::cerr << "Could not read from Server. Terminating" << std::endl;
+				exit(EXIT_FAILURE);
+			}
+			std::cout << res.sum << std::endl;
+		}
+	}
+
+	void str_cli_select(int fd)
+	{
+		std::string line;
+		char rcv_line[MAXLINE];
+		const int cin_fd = fileno(stdin);
+		const int maxfdp1 = std::max(fd, cin_fd) + 1;
+		fd_set read_set;
+		FD_ZERO(&read_set);
+
+		while(true)
+		{
+			FD_SET(fd, &read_set);
+			FD_SET(cin_fd, &read_set);
+
+			select(maxfdp1, &read_set, nullptr, nullptr, nullptr);
+			if (FD_ISSET(cin_fd, &read_set))
+			{
+				std::getline(std::cin, line);
+				if (line == "SHUTDOWN")
+					break;
+				line += '\n';
+				val::utils::writen(fd, line.c_str(), std::min(line.size(), MAXLINE));
+			}
+			if (FD_ISSET(fd, &read_set))
+			{
+				if(val::utils::readline(fd, rcv_line) == 0)
+				{
+					std::cerr << "Could not read from Server. Terminating" << std::endl;
+					exit(EXIT_FAILURE);
+				}
+				std::cout << rcv_line;
+			}
 		}
 	}
 

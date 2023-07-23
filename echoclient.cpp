@@ -34,7 +34,7 @@ int main(int argc, char** argv)
 	}
 
 	std::cout << "Enter a text to echo or SHUTDOWN to close client." << std::endl;
-	val::utils::str_cli(connfd);
+	val::utils::str_cli_select(connfd);
 	close(connfd);
 	return 0;
 }
