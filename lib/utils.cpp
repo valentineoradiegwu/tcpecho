@@ -216,14 +216,19 @@ again:
 			FD_SET(fd, &read_set);
 			FD_SET(cin_fd, &read_set);
 
+			//What if select is awaken by a signal? We should test for EINTR
 			select(maxfdp1, &read_set, nullptr, nullptr, nullptr);
 			if (FD_ISSET(cin_fd, &read_set))
 			{
-				std::getline(std::cin, line);
-				if (line == "SHUTDOWN")
+				if (std::getline(std::cin, line))
+				{
+					if (line == "SHUTDOWN")
+						break;
+					line += '\n';
+					val::utils::writen(fd, line.c_str(), std::min(line.size(), MAXLINE));
+				}
+				else
 					break;
-				line += '\n';
-				val::utils::writen(fd, line.c_str(), std::min(line.size(), MAXLINE));
 			}
 			if (FD_ISSET(fd, &read_set))
 			{
