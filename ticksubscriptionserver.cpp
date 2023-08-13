@@ -90,6 +90,7 @@ int main(int argc, char** argv)
                 const auto len = encode_subscriptions({"9999T30Y3", "US91282CHK09"});
 		if (len <= 0)
 			exit(EXIT_FAILURE);
+		assert(len <= sizeof(WI_SUBSCRIPTION));
 		std::cout << "Encoded subs" << std::endl;
 		for ( int i = 0; i < len; ++i)
 		{

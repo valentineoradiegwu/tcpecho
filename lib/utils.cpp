@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sys/wait.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 
 namespace val::utils
 {
@@ -210,30 +211,37 @@ again:
 		const int maxfdp1 = std::max(fd, cin_fd) + 1;
 		fd_set read_set;
 		FD_ZERO(&read_set);
+		bool finished_reading_cin = false;
 
 		while(true)
 		{
 			FD_SET(fd, &read_set);
-			FD_SET(cin_fd, &read_set);
+			if (!finished_reading_cin)
+				FD_SET(cin_fd, &read_set);
 
 			//What if select is awaken by a signal? We should test for EINTR
 			select(maxfdp1, &read_set, nullptr, nullptr, nullptr);
 			if (FD_ISSET(cin_fd, &read_set))
 			{
-				if (std::getline(std::cin, line))
+				if (std::getline(std::cin, line) && line != "SHUTDOWN")
 				{
-					if (line == "SHUTDOWN")
-						break;
 					line += '\n';
 					val::utils::writen(fd, line.c_str(), std::min(line.size(), MAXLINE));
 				}
 				else
-					break;
+				{
+					finished_reading_cin = true;
+					shutdown(fd, SHUT_WR);
+					FD_CLR(cin_fd, &read_set);
+					continue;
+				}
 			}
 			if (FD_ISSET(fd, &read_set))
 			{
 				if(val::utils::readline(fd, rcv_line) == 0)
 				{
+					if (finished_reading_cin)
+						return;
 					std::cerr << "Could not read from Server. Terminating" << std::endl;
 					exit(EXIT_FAILURE);
 				}
