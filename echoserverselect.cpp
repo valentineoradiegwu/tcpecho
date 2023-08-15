@@ -82,19 +82,19 @@ int main(int argc, char** argv)
 		}
 		else
 		{
-			for (int fd: client_connections)
+			for (auto fd = client_connections.begin(); fd != client_connections.end(); ++fd)
 			{
-				if (FD_ISSET(fd, &read_set))
+				if (FD_ISSET(*fd, &read_set))
 				{
-					if (int bytes_read = read(fd, buffer, MAXLINE))
+					if (int bytes_read = read(*fd, buffer, MAXLINE))
 					{
-						val::utils::writen(fd, buffer, bytes_read);
+						val::utils::writen(*fd, buffer, bytes_read);
 					}
 					else
 					{
-						close(fd);
-						std::remove(client_connections.begin(), client_connections.end(), fd);
-						FD_CLR(fd, &read_set);
+						close(*fd);
+						FD_CLR(*fd, &read_set);
+						client_connections.erase(fd);
 					}
 
 					if (--nready <= 0)
