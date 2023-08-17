@@ -1,11 +1,11 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <algorithm>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <vector>
-#include <sys/select.h>
+#include <poll.h>
 #include "lib/utils.h"
 
 static constexpr int MAX_CONNECTIONS = 36;
@@ -43,20 +43,21 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	fd_set all_fds;
-	FD_ZERO(&all_fds);
-	FD_SET(listenfd, &all_fds);
-	int maxfd = listenfd;
+	struct pollfd watched_fds[MAX_CONNECTIONS];
+	int max_idx = 0;
+	int i;
 
-	std::vector<int> client_connections{};
-	client_connections.reserve(MAX_CONNECTIONS);
+	watched_fds[max_idx].fd = listenfd;
+	watched_fds[max_idx].events = POLLRDNORM;
+
+	for (i = 1; i < MAX_CONNECTIONS; ++i)
+		watched_fds[i].fd = -1;
 
 	while (true)
 	{
-		fd_set read_set = all_fds;
-		auto nready = select(maxfd + 1, &read_set, nullptr, nullptr, nullptr);
+		auto nready = poll(watched_fds, max_idx + 1, -1);
 
-		if (FD_ISSET(listenfd, &read_set))
+		if (watched_fds[0].revents & POLLRDNORM)
 		{
 			if ((connfd = accept(listenfd, nullptr, nullptr)) < 0)
 			{
@@ -65,35 +66,57 @@ int main(int argc, char** argv)
 				exit(EXIT_FAILURE);
 			}
 
-			if (client_connections.size() == MAX_CONNECTIONS)
+			for (i = 1; i < MAX_CONNECTIONS; ++i)
+			{
+				if(watched_fds[i].fd == -1)
+				{
+					watched_fds[i].fd = connfd;
+					watched_fds[i].events = POLLRDNORM;
+					break;
+				}
+			}
+
+			if (i == MAX_CONNECTIONS)
 			{
 				std::cerr << "Maximum supported connections has been reached." << std::endl;
 				close(connfd);
 				continue;
 			}
 
-			FD_SET(connfd, &all_fds);
-			maxfd = std::max(maxfd, connfd);
-			client_connections.push_back(connfd);
+			max_idx = std::max(max_idx, i);
 
 			if (--nready <= 0)
 				continue;
 		}
 		else
 		{
-			for (auto fd = client_connections.begin(); fd != client_connections.end(); ++fd)
+			for (i = 1; i < max_idx + 1; ++i)
 			{
-				if (FD_ISSET(*fd, &read_set))
+				if (watched_fds[i].fd != -1 && watched_fds[i].revents & (POLLRDNORM|POLLERR))
 				{
-					if (int bytes_read = read(*fd, buffer, MAXLINE))
+					const int bytes_read = read(watched_fds[i].fd, buffer, MAXLINE);
+					if (bytes_read > 0)
 					{
-						val::utils::writen(*fd, buffer, bytes_read);
+						val::utils::writen(watched_fds[i].fd, buffer, bytes_read);
+					}
+					else if (bytes_read == 0)
+					{
+						close(watched_fds[i].fd);
+						watched_fds[i].fd = -1;
 					}
 					else
 					{
-						close(*fd);
-						FD_CLR(*fd, &read_set);
-						client_connections.erase(fd);
+						if (errno == ECONNRESET)
+						{
+							close(watched_fds[i].fd);
+							watched_fds[i].fd = -1;
+						}
+						else
+						{
+							std::cerr << "Socket read failed with: " << strerror(errno) << std::endl;
+							exit(EXIT_FAILURE);
+						}
+
 					}
 
 					if (--nready <= 0)
